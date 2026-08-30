@@ -26,3 +26,23 @@ def test_row_round_trip(rule):
 
 def test_required_fields_edge_blank_borrower():
     assert _rule("required_fields").check(make_clean_loan(borrower_id=""), _rule("required_fields").params) is not None
+
+
+from decimal import Decimal
+
+
+def test_non_negative_amounts_edge():
+    r = _rule("non_negative_amounts")
+    assert r.check(make_clean_loan(current_balance=Decimal("-1.00")), r.params) is not None
+
+
+def test_balance_le_principal_edge():
+    r = _rule("balance_le_principal")
+    assert r.check(make_clean_loan(current_balance=Decimal("300000.00"),
+                                   original_principal=Decimal("250000.00")), r.params) is not None
+
+
+def test_interest_rate_range_edge():
+    r = _rule("interest_rate_range")
+    assert r.check(make_clean_loan(interest_rate=Decimal("45.0")), r.params) is not None
+    assert r.check(make_clean_loan(interest_rate=Decimal("5.0")), r.params) is None
