@@ -65,3 +65,19 @@ def test_maturity_after_origination_edge():
 def test_stale_record_edge():
     r = _rule("stale_record")
     assert r.check(make_clean_loan(last_updated_at=date(2000, 1, 1)), r.params) is not None
+
+
+def test_valid_state_code_edge():
+    r = _rule("valid_state_code")
+    assert r.check(make_clean_loan(borrower_state="ZZ"), r.params) is not None
+
+
+def test_payment_status_vs_dpd_edge():
+    r = _rule("payment_status_vs_dpd")
+    assert r.check(make_clean_loan(payment_status="CURRENT", days_past_due=90), r.params) is not None
+
+
+def test_closed_with_balance_edge():
+    r = _rule("closed_with_balance")
+    assert r.check(make_clean_loan(payment_status="CLOSED",
+                                   current_balance=Decimal("5000.00")), r.params) is not None

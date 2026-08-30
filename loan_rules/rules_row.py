@@ -182,3 +182,85 @@ def _stale_corrupt(loan, rng, params):
 register(Rule("stale_record", Scope.ROW, "low",
               MappingProxyType({"as_of": "2024-07-01", "max_age_days": 180}),
               "record is stale", _stale_check, _stale_corrupt))
+
+
+# --- categorical rules -----------------------------------------------------
+US_STATES = [
+    "AL","AK","AZ","AR","CA","CO","CT","DE","FL","GA","HI","ID","IL","IN","IA",
+    "KS","KY","LA","ME","MD","MA","MI","MN","MS","MO","MT","NE","NV","NH","NJ",
+    "NM","NY","NC","ND","OH","OK","OR","PA","RI","SC","SD","TN","TX","UT","VT",
+    "VA","WA","WV","WI","WY","DC",
+]
+
+
+def _state_check(loan, params):
+    st = loan.get("borrower_state")
+    if st not in params["states"]:
+        return violation_from(loan, "valid_state_code", "borrower_state", st,
+                              "valid US code", "borrower_state is not a valid US code")
+    return None
+
+
+def _state_corrupt(loan, rng, params):
+    loan = dict(loan)
+    original = loan["borrower_state"]
+    loan["borrower_state"] = "ZZ"
+    return loan, bundle_from(loan, "valid_state_code", "borrower_state", "ZZ",
+                             "valid US code", "borrower_state is not a valid US code",
+                             original=original)
+
+
+register(Rule("valid_state_code", Scope.ROW, "medium",
+              MappingProxyType({"states": US_STATES}),
+              "borrower_state is not a valid US code", _state_check, _state_corrupt,
+              profiles=BOTH))
+
+
+def _psd_check(loan, params):
+    status, dpd = loan.get("payment_status"), loan.get("days_past_due")
+    if not isinstance(dpd, int):
+        return None
+    if status == "CURRENT" and dpd > 0:
+        return violation_from(loan, "payment_status_vs_dpd", "days_past_due", dpd,
+                              "0 for CURRENT", "CURRENT loan has positive days_past_due")
+    if status == "DELINQUENT" and dpd == 0:
+        return violation_from(loan, "payment_status_vs_dpd", "days_past_due", dpd,
+                              ">0 for DELINQUENT", "DELINQUENT loan has days_past_due=0")
+    return None
+
+
+def _psd_corrupt(loan, rng, params):
+    loan = dict(loan)
+    original = loan["days_past_due"]
+    loan["payment_status"] = "CURRENT"
+    loan["days_past_due"] = 90
+    return loan, bundle_from(loan, "payment_status_vs_dpd", "days_past_due", 90,
+                             "0 for CURRENT", "CURRENT loan has positive days_past_due",
+                             original=original)
+
+
+register(Rule("payment_status_vs_dpd", Scope.ROW, "medium", MappingProxyType({}),
+              "payment_status inconsistent with days_past_due", _psd_check, _psd_corrupt,
+              profiles=BOTH))
+
+
+def _cwb_check(loan, params):
+    bal = loan.get("current_balance")
+    if loan.get("payment_status") == "CLOSED" and isinstance(bal, Decimal) and bal > 0:
+        return violation_from(loan, "closed_with_balance", "current_balance", bal,
+                              "0 for CLOSED", "CLOSED loan has positive balance", severity="high")
+    return None
+
+
+def _cwb_corrupt(loan, rng, params):
+    loan = dict(loan)
+    original = loan["current_balance"]
+    loan["payment_status"] = "CLOSED"
+    loan["current_balance"] = Decimal("5000.00")
+    return loan, bundle_from(loan, "closed_with_balance", "current_balance",
+                             Decimal("5000.00"), "0 for CLOSED",
+                             "CLOSED loan has positive balance", original=original)
+
+
+register(Rule("closed_with_balance", Scope.ROW, "high", MappingProxyType({}),
+              "CLOSED loan has positive balance", _cwb_check, _cwb_corrupt, profiles=BOTH))
