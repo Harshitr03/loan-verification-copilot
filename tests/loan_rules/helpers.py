@@ -16,3 +16,15 @@ def make_clean_loan(i=1, **overrides):
     }
     loan.update(overrides)
     return loan
+
+
+from loan_rules.base import Dataset
+
+
+def make_clean_dataset(n=6):
+    loans = [make_clean_loan(i) for i in range(n)]
+    servicer = [{"loan_id": l["loan_id"], "current_balance": l["current_balance"],
+                 "interest_rate": l["interest_rate"], "payment_status": l["payment_status"]}
+                for l in loans[: max(1, n // 2)]]
+    manifest = [{"loan_id": l["loan_id"], "document_status": "COMPLETE"} for l in loans]
+    return Dataset(loans=loans, servicer_updates=servicer, manifest=manifest)
