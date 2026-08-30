@@ -104,3 +104,81 @@ def _rate_corrupt(loan, rng, params):
 register(Rule("interest_rate_range", Scope.ROW, "medium",
               MappingProxyType({"min": 2.0, "max": 36.0}),
               "interest_rate out of band", _rate_check, _rate_corrupt, profiles=BOTH))
+
+
+# --- date rules ------------------------------------------------------------
+from datetime import timedelta
+
+
+def _valid_dates_check(loan, params):
+    for f in params["fields"]:
+        val = loan.get(f)
+        if val in (None, ""):
+            continue
+        if parse_date(val) is None:
+            return violation_from(loan, "valid_dates", f, val, "parseable date",
+                                  f"{f} is not a valid date", severity="high")
+    return None
+
+
+def _valid_dates_corrupt(loan, rng, params):
+    loan = dict(loan)
+    f = params["fields"][int(rng.integers(len(params["fields"])))]
+    original = loan[f]
+    loan[f] = "13/40/2020"
+    return loan, bundle_from(loan, "valid_dates", f, loan[f], "parseable date",
+                             f"{f} is not a valid date", original=original)
+
+
+register(Rule("valid_dates", Scope.ROW, "high",
+              MappingProxyType({"fields": ["origination_date", "maturity_date",
+                                           "last_payment_date", "last_updated_at"]}),
+              "{field} is not a valid date", _valid_dates_check, _valid_dates_corrupt,
+              profiles=BOTH))
+
+
+def _mao_check(loan, params):
+    o, m = parse_date(loan.get("origination_date")), parse_date(loan.get("maturity_date"))
+    if o and m and m < o:
+        return violation_from(loan, "maturity_after_origination", "maturity_date", m,
+                              f">= {o}", "maturity_date precedes origination_date", severity="high")
+    return None
+
+
+def _mao_corrupt(loan, rng, params):
+    loan = dict(loan)
+    o = parse_date(loan["origination_date"])
+    original = loan["maturity_date"]
+    loan["maturity_date"] = o - timedelta(days=365)
+    return loan, bundle_from(loan, "maturity_after_origination", "maturity_date",
+                             loan["maturity_date"], f">= {o}",
+                             "maturity_date precedes origination_date", original=original)
+
+
+register(Rule("maturity_after_origination", Scope.ROW, "high", MappingProxyType({}),
+              "maturity_date precedes origination_date", _mao_check, _mao_corrupt,
+              profiles=BOTH))
+
+
+def _stale_check(loan, params):
+    as_of, lu = parse_date(params["as_of"]), parse_date(loan.get("last_updated_at"))
+    if lu and (as_of - lu).days > params["max_age_days"]:
+        return violation_from(loan, "stale_record", "last_updated_at", lu,
+                              f"within {params['max_age_days']}d of {as_of}",
+                              "record is stale", severity="low")
+    return None
+
+
+def _stale_corrupt(loan, rng, params):
+    loan = dict(loan)
+    as_of = parse_date(params["as_of"])
+    original = loan["last_updated_at"]
+    loan["last_updated_at"] = as_of - timedelta(days=params["max_age_days"] + 400)
+    return loan, bundle_from(loan, "stale_record", "last_updated_at",
+                             loan["last_updated_at"], f"within {params['max_age_days']}d",
+                             "record is stale", original=original)
+
+
+register(Rule("stale_record", Scope.ROW, "low",
+              MappingProxyType({"as_of": "2024-07-01", "max_age_days": 180}),
+              "record is stale", _stale_check, _stale_corrupt))

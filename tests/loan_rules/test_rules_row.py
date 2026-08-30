@@ -46,3 +46,22 @@ def test_interest_rate_range_edge():
     r = _rule("interest_rate_range")
     assert r.check(make_clean_loan(interest_rate=Decimal("45.0")), r.params) is not None
     assert r.check(make_clean_loan(interest_rate=Decimal("5.0")), r.params) is None
+
+
+from datetime import date
+
+
+def test_valid_dates_edge():
+    r = _rule("valid_dates")
+    assert r.check(make_clean_loan(maturity_date="13/40/2020"), r.params) is not None
+
+
+def test_maturity_after_origination_edge():
+    r = _rule("maturity_after_origination")
+    assert r.check(make_clean_loan(origination_date=date(2050, 1, 1),
+                                   maturity_date=date(2020, 1, 1)), r.params) is not None
+
+
+def test_stale_record_edge():
+    r = _rule("stale_record")
+    assert r.check(make_clean_loan(last_updated_at=date(2000, 1, 1)), r.params) is not None
