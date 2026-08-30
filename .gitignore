@@ -6,4 +6,13 @@ __pycache__/
 venv/
 dist/
 build/
+*.egg-info/
+.pytest_cache/
 .DS_Store
+
+# Real FNMA loan-performance data — large / raw, NOT committed (optional stretch source).
+# The synthetic package under data/ stays the graded oracle. See docs/specs.
+2025Q1.csv
+emp/
+*.zip
+FNMA_MF_LOAN_Current DSCR_032026.csv
