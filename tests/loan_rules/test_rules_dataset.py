@@ -28,3 +28,35 @@ def test_duplicate_loan_id_flags_two_distinct_rows():
     rng = np.random.default_rng(1)
     _, bundles = _rule("duplicate_loan_id").corrupt(make_clean_dataset(), rng, {})
     assert len({b.row_uid for b in bundles}) == 2   # keyed on row_uid, not loan_id
+
+
+def test_suspicious_borrower_repeat_adds_fixed_cluster():
+    r = _rule("suspicious_borrower_repeat")
+    ds = make_clean_dataset(n=6)
+    before = len(ds.loans)
+    ds2, bundles = r.corrupt(ds, np.random.default_rng(2), r.params)
+    assert len(ds2.loans) == before + (r.params["max_repeats"] + 2)
+    assert len({b.row_uid for b in bundles}) == r.params["max_repeats"] + 2
+
+
+def test_duplicate_borrower_combo_repurposes_row():
+    r = _rule("duplicate_borrower_combo")
+    ds = make_clean_dataset(n=6)
+    before = len(ds.loans)
+    ds2, bundles = r.corrupt(ds, np.random.default_rng(3), r.params)
+    assert len(ds2.loans) == before                       # no rows added
+    assert len({b.row_uid for b in bundles}) == 2
+
+
+def test_source_conflict_sets_sibling_value():
+    r = _rule("source_conflict")
+    _, bundles = r.corrupt(make_clean_dataset(), np.random.default_rng(4), r.params)
+    assert bundles and all(b.sibling_value is not None for b in bundles)
+
+
+def test_document_status_present_edge():
+    r = _rule("document_status_present")
+    ds = make_clean_dataset()
+    ds.manifest.pop()
+    flagged = {v.row_uid for v in r.check(ds, build_context(ds), r.params)}
+    assert flagged
