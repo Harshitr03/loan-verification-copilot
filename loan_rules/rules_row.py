@@ -50,7 +50,9 @@ def _nonneg_corrupt(loan, rng, params):
     loan = dict(loan)
     f = params["fields"][int(rng.integers(len(params["fields"])))]
     original = loan[f]
-    loan[f] = -abs(original)
+    # strictly negative even when original is 0.00 (CLOSED loans carry a zero
+    # current_balance, and -abs(0.00) == -0.00 is not < 0, so the check misses it)
+    loan[f] = -(abs(original) + Decimal("1000.00"))
     return loan, bundle_from(loan, "non_negative_amounts", f, loan[f], ">= 0",
                              f"{f} is negative", original=original)
 
@@ -264,3 +266,24 @@ def _cwb_corrupt(loan, rng, params):
 
 register(Rule("closed_with_balance", Scope.ROW, "high", MappingProxyType({}),
               "CLOSED loan has positive balance", _cwb_check, _cwb_corrupt, profiles=BOTH))
+
+
+# --- corrupt field footprints ----------------------------------------------
+# Fields each ROW `corrupt` reads or writes. The generator uses these to avoid
+# co-locating two defects that touch a shared field on one loan — which would
+# otherwise crash (reading a field a prior defect blanked) or mask each other
+# (a later write healing an earlier defect), breaking the superset oracle.
+# MUST be kept in sync with the corrupts above (guarded by a test).
+ROW_FOOTPRINTS = {
+    "required_fields": frozenset(REQUIRED),  # may blank any required field
+    "valid_dates": frozenset({"origination_date", "maturity_date",
+                              "last_payment_date", "last_updated_at"}),
+    "maturity_after_origination": frozenset({"origination_date", "maturity_date"}),
+    "non_negative_amounts": frozenset({"original_principal", "current_balance"}),
+    "balance_le_principal": frozenset({"original_principal", "current_balance"}),
+    "interest_rate_range": frozenset({"interest_rate"}),
+    "payment_status_vs_dpd": frozenset({"payment_status", "days_past_due"}),
+    "closed_with_balance": frozenset({"payment_status", "current_balance"}),
+    "valid_state_code": frozenset({"borrower_state"}),
+    "stale_record": frozenset({"last_updated_at"}),
+}

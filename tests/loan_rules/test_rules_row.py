@@ -36,6 +36,18 @@ def test_non_negative_amounts_edge():
     assert r.check(make_clean_loan(current_balance=Decimal("-1.00")), r.params) is not None
 
 
+def test_non_negative_corrupt_detects_zero_balance():
+    # regression: a CLOSED loan's current_balance is 0.00; the corrupt must still
+    # produce a strictly-negative value the check flags (not -0.00).
+    import numpy as np
+    r = _rule("non_negative_amounts")
+    loan = make_clean_loan(payment_status="CLOSED", current_balance=Decimal("0.00"))
+    # force it to target current_balance (fields = [original_principal, current_balance])
+    params = dict(r.params); params["fields"] = ["current_balance"]
+    corrupted, bundle = r.corrupt(loan, np.random.default_rng(0), params)
+    assert r.check(corrupted, r.params) is not None
+
+
 def test_balance_le_principal_edge():
     r = _rule("balance_le_principal")
     assert r.check(make_clean_loan(current_balance=Decimal("300000.00"),
@@ -81,3 +93,9 @@ def test_closed_with_balance_edge():
     r = _rule("closed_with_balance")
     assert r.check(make_clean_loan(payment_status="CLOSED",
                                    current_balance=Decimal("5000.00")), r.params) is not None
+
+
+def test_every_row_rule_has_a_footprint():
+    from loan_rules.rules_row import ROW_FOOTPRINTS
+    assert {r.id for r in ROW_RULES} == set(ROW_FOOTPRINTS), \
+        "ROW_FOOTPRINTS must list exactly the ROW rules (kept in sync with the corrupts)"
