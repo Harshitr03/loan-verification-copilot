@@ -1,4 +1,4 @@
-.PHONY: install seed test
+.PHONY: install seed test fnma-demo
 
 VENV := .venv
 PY := $(VENV)/bin/python
@@ -14,3 +14,6 @@ seed:
 
 test:
 	$(PY) -m pytest -q
+
+fnma-demo:
+	$(PY) -c "from fnma_sf import build_demo_tape; print(build_demo_tape('2025Q1.csv', 'data/fnma_loan_tape.csv', 5000))"

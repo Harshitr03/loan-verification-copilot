@@ -16,3 +16,13 @@ build/
 emp/
 *.zip
 FNMA_MF_LOAN_Current DSCR_032026.csv
+
+# Generated synthetic package (regenerable via `make seed`; source code in data/ stays tracked).
+data/loan_tape.csv
+data/servicer_update.csv
+data/document_manifest.csv
+data/ground_truth_exceptions.csv
+data/expected_exception_sample.csv
+data/validation_rules.json
+data/users.json
+data/fnma_loan_tape.csv
