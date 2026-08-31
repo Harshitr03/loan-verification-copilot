@@ -110,8 +110,13 @@ whitespace/case cleanup. Raw values are preserved for lineage.
   Lifecycle: `imported → validated → in_review → verified | rejected`.
 - **exceptions** — `{_id, loan_id, dataset_id, rule_id, type, severity
   (low|medium|high|critical), source (rule|ml|reconciliation), field, message,
-  observed_value, expected, status (open|resolved|accepted|rejected),
+  observed_value, expected, sibling_value?, status (open|resolved|accepted|rejected),
   ai_recommendation_id?, resolution: {action, old_value, new_value, by, at}}`.
+  The `{rule_id, field, observed_value, expected, sibling_value?, message}` subset is
+  exactly the **defect context bundle** from the data-generator spec (§7) — one shape
+  shared by the generator's ground truth, this record, and Module D's LLM grounding.
+  `sibling_value` holds the servicer_update value for `source_conflict`. There is no
+  `corrupted_value` field (that is generator-only; the engine has no "before").
 - **ai_recommendations** — `{_id, exception_id?, loan_id?, kind, provider, model,
   prompt, response, suggested_value?, confidence, created_at, decision
   (pending|accepted|edited|rejected), decided_by, decided_at}`.
@@ -138,34 +143,132 @@ Indexes: `loans.loan_id`, `exceptions.{status,severity,type}`,
 - Upload summary: total / imported / failed, with per-row failure reasons.
 - Source-file lineage preserved on every loan (`dataset_id`, `raw_record` link).
 
+### 6.1 Source profiles and dataset grain
+
+Every dataset declares a **profile** that fixes its grain and which rules apply:
+
+| Profile | Grain | Key | Source |
+|---|---|---|---|
+| `loan_tape` | one row = one loan (loan-grain) | `loan_id` | synthetic package (graded) + collapsed real data |
+| `sf_performance_panel` | one row = one loan-month | `(loan_id, reporting_period)` | FNMA SF Loan Performance connector (§6.3, optional stretch) |
+
+The graded A–H path is **always `loan_tape`**. The synthetic package remains the
+primary, graded source (it carries ground truth; real data has none). The panel
+profile is additive and never becomes a co-equal product — there is no separate
+loan-month viewer flow.
+
+### 6.2 Two-pass, grain-aware validation (panel sources)
+
+A `loan_tape` upload runs the existing single pass (normalize → the 15 loan-grain
+rules → exceptions). A `sf_performance_panel` upload runs **two extra passes
+first**, then joins the graded path:
+
+- **Pass 1 — panel-consistency (grain = loan-month).** Runs at ingestion; findings
+  surface as **Module A ingestion exceptions on raw rows** (not loan-grain
+  exceptions). Checks:
+  - `(loan_id, reporting_period)` is unique; no gaps in a loan's monthly sequence.
+  - Per loan, **static** fields are constant across its months: `origination_date`,
+    `original_principal`, `term_months`, `maturity_date`, `borrower_state`, credit score.
+  - `current_balance` (Current Actual UPB) is monotonically non-increasing over months.
+  - Plus the **row-local rule subset** (rules whose `profiles` include
+    `sf_performance_panel`; see §7).
+- **Pass 2 — collapse to loan tape.** Group by loan; keep the row with the **latest
+  `reporting_period`** per loan. Latest (not origination-month) is the chosen
+  collapse rule because `payment_status`, `days_past_due`, `current_balance` and
+  staleness on the latest month carry the real signal; the origination month would
+  make every loan look pristine.
+- **Pass 3 — loan-grain validation.** Run the existing **15 loan-grain rules,
+  unchanged**, on the collapsed tape. This is the graded path; the collapsed tape is
+  an ordinary `loan_tape` dataset from here on.
+
+### 6.3 FNMA SF Loan Performance connector (optional stretch)
+
+Parses the headerless, pipe-delimited FNMA Single-Family Loan Performance file
+(`source_system = "FNMA_SF_LPD"`) per the CRT glossary. **The file has a leading
+pipe**, so after `line.split('|')` glossary field *N* is at `parts[N-1]`
+(`parts[0]` is the empty Reference Pool ID) — this off-by-one is load-bearing and is
+pinned by a test. Field map (glossary position → canonical field):
+
+| Canonical | Glossary pos | Source field / derivation |
+|---|---|---|
+| `loan_id` | 2 | Loan Identifier |
+| `last_updated_at` | 3 | Monthly Reporting Period (MMYYYY → date, day=01) |
+| `servicer_name` | 6 | Servicer Name |
+| `interest_rate` | 9 | Current Interest Rate |
+| `original_principal` | 10 | Original UPB |
+| `current_balance` | 12 | Current Actual UPB |
+| `term_months` | 13 | Original Loan Term |
+| `origination_date` | 14 | Origination Date (MMYYYY) |
+| `maturity_date` | 19 | Maturity Date (MMYYYY) |
+| `borrower_state` | 31 | Property State |
+| `loan_purpose` | 27 | P→PURCHASE, C→CASHOUT, R→REFI, **U→REFI (unspecified)** |
+| `credit_grade` | 24 | Borrower Credit Score (FICO) → A/B/C/D bands |
+| `payment_status` | 44,40 | Zero Balance Code (44) present → CLOSED; else delinquency (40): `"00"`→CURRENT, numeric>0→DELINQUENT, `"XX"`→null |
+| `days_past_due` | 40 | numeric months × 30; `"XX"` → null |
+| `last_payment_date` | 51 | Last Paid Installment Date (MMYYYY) |
+| `source_system` | — | `"FNMA_SF_LPD"` |
+| `borrower_id`, `income_band`, `document_status` | — | no source → null (flow into failed/partial-import surface, must not crash normalization) |
+
+MMYYYY dates are month-precision (day=01). Positions are verified against
+`crt-file-layout-and-glossary.xlsx`.
+
 ---
 
 ## 7. Module B — Validation Engine
 
 Rules are **data-driven** from `validation_rules.json` (configurable, as the doc
-requires) and executed by a modular rule runner. Each rule is a small pure
-function `(loan, context) -> Exception | None`. Context carries cross-record and
-cross-file state (duplicate index, servicer_update join, document_manifest join).
+requires) and executed by a modular rule runner. Each rule is a self-describing
+**`Rule` object** — the shared spine defined in the standalone `loan_rules`
+package (see the [data-generator spec](./2026-08-29-data-generator-design.md) §3) —
+carrying `id`, `scope`, `severity`, `params`, `message_tmpl`, `profiles`, and two
+pure functions that take `params` explicitly: `check` (detect) and `corrupt`
+(manufacture, used only by the generator). The engine imports these rules and calls
+`.check`; the generator imports the same objects and calls `.corrupt`, so injection
+and detection can never drift.
+
+**`profiles: frozenset[str]`** declares which dataset profiles (§6.1) a rule applies
+to — `{"loan_tape"}`, or `{"loan_tape", "sf_performance_panel"}`. The runner filters
+rules by the dataset's profile, so panel-grain passes only run rules that are
+meaningful loan-month by loan-month. Identity/time rules
+(`duplicate_loan_id`, `duplicate_borrower_combo`, `suspicious_borrower_repeat`,
+`stale_record`, `source_conflict`) are **`loan_tape`-only**: at panel grain the key is
+`(loan_id, period)`, so e.g. `duplicate_loan_id` would flag every loan ~125×.
+`required_fields` and `document_status_present` are also `loan_tape`-only — they
+reference fields the panel connector leaves null (`borrower_id`, `document_status`),
+which the panel pass instead surfaces through Module A's partial-import row (§6.2).
+
+Rules are **`ROW`- or `DATASET`-scoped**. `ROW` rules judge one loan in isolation
+(`check(loan, params) -> Exception | None`). `DATASET` rules
+(`duplicate_loan_id`, `duplicate_borrower_combo`, `suspicious_borrower_repeat`,
+`source_conflict`, `document_status_present`) need cross-record/cross-file context —
+`check(dataset, ctx, params) -> list[Exception]` — where `ctx` carries the duplicate
+index, servicer_update join, and document_manifest join.
 
 Rules cover all §7 intentional issues:
 
-| Rule | Detects |
-|---|---|
-| required_fields | Missing loan_id / required fields |
-| valid_dates | Invalid/unparseable date formats |
-| maturity_after_origination | maturity_date < origination_date |
-| non_negative_amounts | Negative principal or balance |
-| balance_le_principal | current_balance > original_principal |
-| interest_rate_range | Rate outside expected band (from rules json) |
-| payment_status_vs_dpd | payment_status inconsistent with days_past_due |
-| closed_with_balance | Loan closed but positive balance |
-| document_status_present | Missing document_status / not in manifest |
-| valid_state_code | Invalid US state code |
-| duplicate_loan_id | Duplicate loan IDs |
-| duplicate_borrower_combo | Duplicate borrower + amount + origination_date |
-| suspicious_borrower_repeat | Suspiciously repeated borrower records |
-| stale_record | last_updated_at older than threshold |
-| source_conflict | Conflicting values vs servicer_update.csv |
+Profiles: **B** = both (`loan_tape` + `sf_performance_panel`, row-local); **T** =
+`loan_tape` only.
+
+| Rule | Detects | Profiles |
+|---|---|---|
+| required_fields | Missing loan_id / required fields | T |
+| valid_dates | Invalid/unparseable date formats | B |
+| maturity_after_origination | maturity_date < origination_date | B |
+| non_negative_amounts | Negative principal or balance | B |
+| balance_le_principal | current_balance > original_principal | B |
+| interest_rate_range | Rate outside expected band (from rules json) | B |
+| payment_status_vs_dpd | payment_status inconsistent with days_past_due | B |
+| closed_with_balance | Loan closed but positive balance | B |
+| document_status_present | Missing document_status / not in manifest | T |
+| valid_state_code | Invalid US state code | B |
+| duplicate_loan_id | Duplicate loan IDs | T |
+| duplicate_borrower_combo | Duplicate borrower + amount + origination_date | T |
+| suspicious_borrower_repeat | Suspiciously repeated borrower records | T |
+| stale_record | last_updated_at older than threshold | T |
+| source_conflict | Conflicting values vs servicer_update.csv | T |
+
+The 8 **B** rules are the row-local subset Pass 1 (§6.2) reuses on panel rows; the 7
+**T** rules run only on the collapsed loan tape (Pass 3).
 
 Output: exceptions with type + severity + provenance; per-dataset **data-quality
 score** = f(exception counts weighted by severity).
@@ -247,14 +350,30 @@ OpenAPI docs at `/docs`.
 
 ---
 
-## 12. Phase 2 (differentiator, non-blocking) — ML anomaly layer
+## 12. Phase 2 (differentiators, non-blocking)
 
-After A–H work end-to-end: an unsupervised **Isolation Forest** over numeric
-features (principal, balance, rate, term, dpd) plus per-column IQR outlier
-detection, trained on the uploaded tape itself. Produces `source=ml` exceptions
-for "valid but statistically weird" values the fixed rules can't express.
-Clearly labeled in the UI as ML-flagged, low default severity, always reviewer-
-gated.
+Both are additive stretch work, started only after A–H run end-to-end on the graded
+synthetic `loan_tape` path.
+
+### 12.1 ML anomaly layer
+
+An unsupervised **Isolation Forest** over numeric features (principal, balance,
+rate, term, dpd) plus per-column IQR outlier detection, trained on the uploaded tape
+itself. Produces `source=ml` exceptions for "valid but statistically weird" values
+the fixed rules can't express. Clearly labeled in the UI as ML-flagged, low default
+severity, always reviewer-gated.
+
+### 12.2 Real-data connector — FNMA SF Loan Performance
+
+The `sf_performance_panel` connector and two-pass grain-aware pipeline (§6.1–6.3).
+Ingests the real FNMA Single-Family Loan Performance file, validates it at loan-month
+grain (Pass 1), collapses to the latest month per loan (Pass 2), and feeds the
+collapsed tape into the **unchanged** 15 loan-grain rules (Pass 3). This proves the
+engine against externally-sourced data — but real data carries **no ground truth**,
+so the synthetic package stays the graded oracle; the connector is stretch, never the
+primary source. The demo collapses a 5,000-loan slice from the quarterly file. Raw
+FNMA files are git-ignored (large / licensed); only a small collapsed fixture from the
+8-loan sample is committed for tests.
 
 ---
 
@@ -278,21 +397,27 @@ gated.
 loan-verification-copilot/
   docker-compose.yml
   Makefile                 # up, down, seed, test
+  pyproject.toml           # editable install of loan_rules (shared by backend + generator)
   README.md
   docs/
-    specs/                 # this file
+    specs/                 # this file + data-generator spec
     architecture-note.md
     ai-development-log.md
-  data/                    # synthetic package (generated)
-    loan_tape.csv  servicer_update.csv  document_manifest.csv
-    validation_rules.json  users.json  expected_exception_sample.csv
+  loan_rules/              # STANDALONE shared spine — Rule objects (check + corrupt),
+                           # import-pure (no Beanie/Mongo). Imported by both backend
+                           # and data/generate.py. NOT under backend/app.
+  data/
+    generate.py            # seeded synthetic-package generator (imports loan_rules)
+    loan_tape.csv  servicer_update.csv  document_manifest.csv          # generated
+    validation_rules.json  users.json  expected_exception_sample.csv   # generated
+    ground_truth_exceptions.csv                                        # generated test oracle
   backend/
     app/
       main.py  config.py  db.py  auth.py
       models/              # beanie documents
       schemas/             # pydantic API models
       ingestion/           # parse, normalize, lineage
-      validation/          # rule runner + individual rules
+      validation/          # rule runner + context builder (consumes loan_rules)
       ai/                  # AIProvider, ClaudeProvider, MockProvider
       audit/               # hash chain
       verification/        # verified-record builder + hashing
@@ -305,6 +430,11 @@ loan-verification-copilot/
       components/          # grid, exception drawer, AI panel, audit viewer
       api/  lib/  auth/
 ```
+
+Note: the individual rule *definitions* live in the standalone `loan_rules/`
+package (so the generator can import them without standing up the app/DB);
+`backend/app/validation/` holds only the runner and the cross-file context builder
+that consume them.
 
 ---
 
@@ -336,3 +466,15 @@ security, regulatory compliance. Security is demo-grade JWT only.
   graded issue list; ML is additive, not load-bearing.
 - **LLM suggestion-only:** satisfies §9 AI controls; detection stays deterministic.
 - **Mock AI fallback:** guarantees a working demo with no external dependency.
+- **Synthetic tape is the graded oracle; real data is optional stretch:** the
+  synthetic package has ground truth, so it's the only source we can prove the engine
+  against. The FNMA connector (§12.2) adds real-data credibility but has no ground
+  truth — it validates behavior, not correctness.
+- **Grain-aware rules over forking the product:** rather than a separate loan-month
+  product, one `profiles` dimension on `Rule` lets the same engine validate panel data
+  (Pass 1) and, after a latest-month collapse (Pass 2), reuse the unchanged 15
+  loan-grain rules (Pass 3). Changes stay additive; the graded loan-tape path is
+  untouched.
+- **Collapse to latest month, not origination:** the latest reporting month carries
+  the live payment/delinquency/balance signal; origination-month would make every
+  loan look pristine and defeat validation.
