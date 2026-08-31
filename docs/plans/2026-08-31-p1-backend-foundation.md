@@ -710,3 +710,7 @@ Register the marker in `[tool.pytest.ini_options] markers = ["integration: requi
 - `Exception` model shadows the builtin — always import as `from backend.app.models import Exception as Exc` in test/impl modules that also raise exceptions.
 - Add to `conftest.py` an `auth_headers(role)` helper + `reviewer_headers`/`operator_headers`/`consumer_headers` fixtures (seed a user of that role, mint a token, return `{"Authorization": f"Bearer <tok>"}`); T6 and every later plan's API tests use them.
 - **Domain-field BSON-stability** is a hard rule for anything hashed: audit `payload`s and the verified record's `canonical_data` must be plain JSON (strings/ints/lists/dicts) — never a raw `datetime`/`Decimal` — or `verify()` will break against real Mongo (the very bug 1a fixes).
+
+**Execution deviations (found while building P1, kept for later plans):**
+- **Pin `beanie>=1.26,<2`.** Beanie 2.x's index sync calls `list_collection_names(authorizedCollections=…)`, which `mongomock-motor` rejects → every offline test errors. Beanie 1.30 works with mongomock. (If we later move all tests to real Mongo we can lift the pin.)
+- **`backend/app/models/types.py` `Money = Annotated[Decimal, BeforeValidator(Decimal128→Decimal)]`.** Beanie stores `Decimal` as BSON `Decimal128`; pydantic v2 won't re-validate that back into a `Decimal` field on read. All `Decimal` model fields (Loan money fields, and any added later) must use `Money`, not bare `Decimal`.
