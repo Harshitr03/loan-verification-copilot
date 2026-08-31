@@ -1,0 +1,117 @@
+{
+  "chain_verified": {
+    "ok": true,
+    "broken_at": null
+  },
+  "entry_count": 12,
+  "entries": [
+    {
+      "seq": 1,
+      "event_type": "file_uploaded",
+      "entity_type": "dataset",
+      "entity_id": "6a95919705864847cce26913",
+      "actor": "operator",
+      "ts_iso": "2026-08-31T14:37:18.834467+00:00",
+      "entry_hash": "ad0b83a415dc3e4ad18521837c774541aa1055c264da8e40d62dd51c5f84c336"
+    },
+    {
+      "seq": 2,
+      "event_type": "validation_executed",
+      "entity_type": "dataset",
+      "entity_id": "6a95919705864847cce26913",
+      "actor": "system",
+      "ts_iso": "2026-08-31T14:37:23.388050+00:00",
+      "entry_hash": "dacdb55bd8badab3ce30398ab74a791e39602a6c5c1f29071f15b6e1093fabf8"
+    },
+    {
+      "seq": 3,
+      "event_type": "verified_record_created",
+      "entity_type": "loan",
+      "entity_id": "LN00000",
+      "actor": "reviewer",
+      "ts_iso": "2026-08-31T14:37:23.428876+00:00",
+      "entry_hash": "72ca89ed4962d8958c48bed4b4cb9ed338dc3101c08a97bcc12684d7e45b4dc3"
+    },
+    {
+      "seq": 4,
+      "event_type": "verified_record_created",
+      "entity_type": "loan",
+      "entity_id": "LN00001",
+      "actor": "reviewer",
+      "ts_iso": "2026-08-31T14:37:23.432896+00:00",
+      "entry_hash": "a255d5e04c2cc9948deeee331104d6cedb8048d3407798077f7cbb647d19dffd"
+    },
+    {
+      "seq": 5,
+      "event_type": "verified_record_created",
+      "entity_type": "loan",
+      "entity_id": "LN00002",
+      "actor": "reviewer",
+      "ts_iso": "2026-08-31T14:37:23.436610+00:00",
+      "entry_hash": "be0f8463090f5480c9da39f4f9198a9d778daed9109cd9b4bebe488bb4d5f36b"
+    },
+    {
+      "seq": 6,
+      "event_type": "verified_record_created",
+      "entity_type": "loan",
+      "entity_id": "LN00003",
+      "actor": "reviewer",
+      "ts_iso": "2026-08-31T14:37:23.440465+00:00",
+      "entry_hash": "288de2a80bc6996238dd981fedc9586d28b47e9eb84fb06d896a55f2af06d41c"
+    },
+    {
+      "seq": 7,
+      "event_type": "verified_record_created",
+      "entity_type": "loan",
+      "entity_id": "LN00004",
+      "actor": "reviewer",
+      "ts_iso": "2026-08-31T14:37:23.444460+00:00",
+      "entry_hash": "6f317497d51aafa2b6f7ecf1e72a4c6dadcf662e7d0244181152d65234b0d642"
+    },
+    {
+      "seq": 8,
+      "event_type": "verified_record_created",
+      "entity_type": "loan",
+      "entity_id": "LN00005",
+      "actor": "reviewer",
+      "ts_iso": "2026-08-31T14:37:23.448578+00:00",
+      "entry_hash": "0418fa2c8f69df1854d7d22965ddcd639b8dcc47cd18e499138826a39b62419f"
+    },
+    {
+      "seq": 9,
+      "event_type": "verified_record_created",
+      "entity_type": "loan",
+      "entity_id": "LN00006",
+      "actor": "reviewer",
+      "ts_iso": "2026-08-31T14:37:23.452112+00:00",
+      "entry_hash": "e7d0113e2f03ecaf3fc7385a75fe9831abf8cf331222c7e98d747e99fb6161b5"
+    },
+    {
+      "seq": 10,
+      "event_type": "verified_record_created",
+      "entity_type": "loan",
+      "entity_id": "LN00007",
+      "actor": "reviewer",
+      "ts_iso": "2026-08-31T14:37:23.454957+00:00",
+      "entry_hash": "9a7ff049874b6aae9ce89b8bb9ece1ed9276169ab057539d4d2c7cf8e058e408"
+    },
+    {
+      "seq": 11,
+      "event_type": "verified_record_created",
+      "entity_type": "loan",
+      "entity_id": "LN00008",
+      "actor": "reviewer",
+      "ts_iso": "2026-08-31T14:37:23.458480+00:00",
+      "entry_hash": "7632cd6995702f4e3ae4b534decc897506dd2cc37d503fc1d4d8f2fbad2b3d0e"
+    },
+    {
+      "seq": 12,
+      "event_type": "verified_record_created",
+      "entity_type": "loan",
+      "entity_id": "LN00009",
+      "actor": "reviewer",
+      "ts_iso": "2026-08-31T14:37:23.462534+00:00",
+      "entry_hash": "1a2ceb603eeb59cd4cbfcc91cde86e374e6392d98989d8b08f8d025b1ef3e808"
+    }
+  ]
+}

@@ -1,6 +1,10 @@
 import pytest
 from backend.app.chain import HashChain
 from backend.app.models import AuditEntry
+# NOTE: the concurrency (F1) and nested-Decimal (F2) regressions live in the
+# real-Mongo lane (test_integration_chain.py) — mongomock's ops don't yield to
+# the event loop and keep full datetime/Decimal precision, so it hides both
+# classes of bug (the same reason it hid the original 1a timestamp bug).
 
 
 @pytest.mark.asyncio

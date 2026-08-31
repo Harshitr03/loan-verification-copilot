@@ -614,6 +614,11 @@ class HashChain:
 
 Note: `find_one_and_update` with `return_document=True` (pymongo `ReturnDocument.AFTER`) returns the incremented doc — under `mongomock-motor` and real Mongo alike this is atomic. `append_many` (reserve a seq block via a single `$inc: {value: len(rows)}`, then link locally) is a short addition; write it only if a later plan needs spec-literal per-item chaining.
 
+**Two real-Mongo-only correctness fixes applied during execution (mongomock hid both, like the 1a bug — regression tests live in the integration lane, Task 7):**
+- **F1 — concurrency fork:** the reserve-seq → read-tail → insert body is wrapped in a per-chain-name `asyncio.Lock` (`_lock_for(name)`). Without it, two overlapping appends fork the linkage (a seq-N entry pointing at seq-N+1's hash) and `verify()` false-breaks. Proven: `test_concurrent_appends_do_not_fork_the_chain` (25 concurrent appends) fails on real Mongo pre-fix, passes post-fix.
+- **F2 — nested datetime/Decimal in a hashed field:** `append` deep-canonicalizes the whole `domain` via `_stable()` (datetime→isoformat, Decimal/Decimal128→str, recursive) **before both hashing and storing**, so the stored value equals the hashed value and both survive a BSON round-trip. This centralizes the "hashed values must be BSON-stable" invariant in the primitive — callers (audit payloads, verified `canonical_data`/`validation_result`/`reviewer_decision`) can't forget it. Proven: `test_nested_decimal_and_datetime_in_payload_survive`.
+- Minor: `lifespan` now `client.close()`s the Motor client on shutdown.
+
 - [ ] **Step 4: Run to verify pass** — `.venv/bin/python -m pytest backend/tests/test_chain.py -v`.
 - [ ] **Step 5: Commit** `feat(backend): shared HashChain (atomic seq, stable-ts, verify)`.
 

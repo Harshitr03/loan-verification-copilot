@@ -1,4 +1,4 @@
-from datetime import date, datetime
+from datetime import date
 from typing import Optional
 from beanie import Document
 from backend.app.models.types import Money
@@ -25,7 +25,7 @@ class Loan(Document):
     days_past_due: Optional[int] = None
     servicer_name: Optional[str] = None
     last_payment_date: Optional[date] = None
-    last_updated_at: Optional[datetime] = None
+    last_updated_at: Optional[date] = None     # date-precision across all sources (see stale_record)
     document_status: Optional[str] = None
     source_system: Optional[str] = None
     normalized_from_raw_id: Optional[str] = None

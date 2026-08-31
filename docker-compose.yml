@@ -1,0 +1,28 @@
+services:
+  mongo:
+    image: mongo:7
+    volumes: [mongo_data:/data/db]
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.runCommand('ping').ok"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build: { context: ., dockerfile: backend/Dockerfile }
+    environment:
+      LVC_MONGODB_URI: mongodb://mongo:27017
+      LVC_MONGODB_DB: lvc
+      LVC_JWT_SECRET: ${LVC_JWT_SECRET:-dev-secret-change-me}
+      LVC_ANTHROPIC_API_KEY: ${LVC_ANTHROPIC_API_KEY:-}
+    depends_on:
+      mongo: { condition: service_healthy }
+    ports: ["8000:8000"]
+
+  web:
+    build: { context: ./frontend, dockerfile: Dockerfile }
+    depends_on: [api]
+    ports: ["5173:80"]
+
+volumes:
+  mongo_data: {}

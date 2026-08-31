@@ -18,4 +18,7 @@ async def lifespan(app):
         await seed_users()                  # idempotent; no-op if users.json absent
     except FileNotFoundError:
         pass
-    yield
+    try:
+        yield
+    finally:
+        client.close()                      # release the Motor client on shutdown
