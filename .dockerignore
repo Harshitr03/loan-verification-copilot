@@ -1,0 +1,23 @@
+.venv/
+**/__pycache__/
+*.pyc
+*.egg-info/
+.pytest_cache/
+.git/
+node_modules/
+frontend/node_modules/
+frontend/dist/
+# large / irrelevant data (backend regenerates its seed package at build)
+2025Q1.csv
+emp/
+*.zip
+FNMA_MF_LOAN_Current DSCR_032026.csv
+data/loan_tape.csv
+data/servicer_update.csv
+data/document_manifest.csv
+data/ground_truth_exceptions.csv
+data/expected_exception_sample.csv
+data/validation_rules.json
+data/users.json
+data/fnma_loan_tape.csv
+docs/samples/
