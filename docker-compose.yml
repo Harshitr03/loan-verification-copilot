@@ -18,9 +18,9 @@ services:
       LVC_DEMO_SEED: ${LVC_DEMO_SEED:-1}   # seed verified records + audit chain on boot; set 0 to disable
     depends_on:
       mongo: { condition: service_healthy }
-    ports: ["8000:8000"]
+    ports: ["8000:8080"]                   # host :8000 -> container :8080 (matches Dockerfile default)
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/health')"]
       interval: 5s
       timeout: 5s
       retries: 12
