@@ -52,6 +52,9 @@ async def list_exceptions(status: str | None = None, severity: str | None = None
     rows = await cur.to_list()
     if q:                                       # search by loan/borrower id substring
         rows = [e for e in rows if q in (e.loan_id or "")]
+    # triage order: worst severity first, so page 1 is the most urgent (not insertion order)
+    _rank = {"critical": 0, "high": 1, "medium": 2, "low": 3}
+    rows.sort(key=lambda e: _rank.get(e.severity, 9))
     items = rows[skip:skip + limit]
     return {"items": [e.model_dump(mode="json") for e in items], "total": len(rows) if q else total}
 

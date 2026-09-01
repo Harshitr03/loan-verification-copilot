@@ -10,8 +10,12 @@ const AI_KINDS = [
   { k: "compare", tip: "Compare the loan tape against the servicer file and recommend the reliable value." },
 ];
 
+const PAGE_SIZE = 25;
+
 export default function Reviewer() {
   const [items, setItems] = useState<any[] | null>(null);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(0);
   const [sev, setSev] = useState("");
   const [status, setStatus] = useState("");
   const [q, setQ] = useState("");
@@ -22,10 +26,19 @@ export default function Reviewer() {
     if (sev) p.set("severity", sev);
     if (status) p.set("status", status);
     if (q) p.set("q", q);
+    p.set("skip", String(page * PAGE_SIZE));
+    p.set("limit", String(PAGE_SIZE));
     setItems(null);
-    api.get("/exceptions?" + p.toString()).then((r) => setItems(r.items)).catch(() => setItems([]));
+    api.get("/exceptions?" + p.toString())
+      .then((r) => { setItems(r.items); setTotal(r.total ?? r.items.length); })
+      .catch(() => { setItems([]); setTotal(0); });
   };
-  useEffect(() => { load(); }, [sev, status, q]);
+  useEffect(() => { load(); }, [sev, status, q, page]);
+
+  // any filter change resets to the first page
+  const onFilter = (setter: (v: string) => void) => (v: string) => { setter(v); setPage(0); };
+  const start = total === 0 ? 0 : page * PAGE_SIZE + 1;
+  const end = Math.min((page + 1) * PAGE_SIZE, total);
 
   return (
     <div>
@@ -33,15 +46,17 @@ export default function Reviewer() {
       <div className="card">
         <div className="row" style={{ marginBottom: 14, justifyContent: "space-between" }}>
           <div className="row">
-            <select value={sev} onChange={(e) => setSev(e.target.value)} aria-label="Severity filter">
+            <select value={sev} onChange={(e) => onFilter(setSev)(e.target.value)} aria-label="Severity filter">
               <option value="">All severities</option><option>low</option><option>medium</option><option>high</option><option>critical</option>
             </select>
-            <select value={status} onChange={(e) => setStatus(e.target.value)} aria-label="Status filter">
+            <select value={status} onChange={(e) => onFilter(setStatus)(e.target.value)} aria-label="Status filter">
               <option value="">All statuses</option><option>open</option><option>accepted</option><option>resolved</option><option>rejected</option>
             </select>
-            <input placeholder="search loan id…" value={q} onChange={(e) => setQ(e.target.value)} />
+            <input placeholder="search loan id…" value={q} onChange={(e) => onFilter(setQ)(e.target.value)} />
           </div>
-          <span className="faint mono" style={{ fontSize: 12 }}>{items?.length ?? "…"} shown</span>
+          <span className="faint mono" style={{ fontSize: 12 }}>
+            {total === 0 ? "0 exceptions" : `${start}–${end} of ${total}`}
+          </span>
         </div>
         <table>
           <thead><tr><th>Loan</th><th>Rule</th><th>Field</th><th>Observed</th><th>Expected</th><th>Severity</th><th>Status</th></tr></thead>
@@ -63,6 +78,15 @@ export default function Reviewer() {
             )}
           </tbody>
         </table>
+        {total > PAGE_SIZE && (
+          <div className="row" style={{ justifyContent: "space-between", marginTop: 14 }}>
+            <span className="faint mono" style={{ fontSize: 12 }}>Page {page + 1} of {Math.ceil(total / PAGE_SIZE)}</span>
+            <div className="row">
+              <button className="sm ghost" disabled={page === 0} onClick={() => setPage((p) => p - 1)}>← Prev</button>
+              <button className="sm ghost" disabled={end >= total} onClick={() => setPage((p) => p + 1)}>Next →</button>
+            </div>
+          </div>
+        )}
       </div>
       {open && <Drawer exc={open} onClose={() => { setOpen(null); load(); }} />}
     </div>
