@@ -55,19 +55,19 @@ async def run_validation(dataset_id, rules_path=None) -> dict:
     # idempotent re-validation: clear this dataset's prior rule-sourced exceptions
     await Exc.find(Exc.dataset_id == dataset_id, Exc.source == "rule").delete()
 
-    for v in violations:
-        await Exc(
-            loan_id=v.loan_id, loan_ref=v.row_uid, dataset_id=dataset_id, rule_id=v.rule_id,
-            type="DATASET" if v.rule_id in _DATASET_RULES else "ROW",
-            severity=v.severity, source="rule", field=v.field,
-            observed_value=str(v.observed_value), expected=str(v.expected),
-            sibling_value=(str(v.sibling_value) if v.sibling_value is not None else None),
-            message=v.message, status="open").insert()
+    exc_docs = [Exc(
+        loan_id=v.loan_id, loan_ref=v.row_uid, dataset_id=dataset_id, rule_id=v.rule_id,
+        type="DATASET" if v.rule_id in _DATASET_RULES else "ROW",
+        severity=v.severity, source="rule", field=v.field,
+        observed_value=str(v.observed_value), expected=str(v.expected),
+        sibling_value=(str(v.sibling_value) if v.sibling_value is not None else None),
+        message=v.message, status="open") for v in violations]
+    for i in range(0, len(exc_docs), 1000):          # batch insert (one round-trip per 1k)
+        await Exc.insert_many(exc_docs[i:i + 1000])
 
-    for l in loans:
-        l.validation_status = "validated"
-        l.lifecycle_state = "validated"
-        await l.save()
+    # one bulk update instead of a save() per loan
+    await Loan.find(Loan.dataset_id == dataset_id).update(
+        {"$set": {"validation_status": "validated", "lifecycle_state": "validated"}})
 
     # severity-weighted quality score (finding #6)
     total_w = (len(loans) or 1) * _SEV_WEIGHT["critical"]
