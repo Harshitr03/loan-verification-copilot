@@ -26,3 +26,11 @@ packages = ["loan_rules", "fnma_sf"]
 testpaths = ["tests", "backend/tests"]
 asyncio_mode = "auto"
 markers = ["integration: requires a real MongoDB (LVC_TEST_MONGODB_URI)"]
+filterwarnings = [
+  # third-party deprecation noise (Beanie/lazy_model accessing model_fields on instances,
+  # pydantic v2.11 shims). Not our code; silenced so real warnings stay visible.
+  "ignore::DeprecationWarning:lazy_model.*",
+  "ignore::pydantic.PydanticDeprecatedSince211",
+  "ignore:.*model_fields.*:DeprecationWarning",
+  "ignore:.*datetime.datetime.utcnow.*:DeprecationWarning",
+]

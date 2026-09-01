@@ -15,13 +15,20 @@ services:
       LVC_MONGODB_DB: lvc
       LVC_JWT_SECRET: ${LVC_JWT_SECRET:-dev-secret-change-me}
       LVC_ANTHROPIC_API_KEY: ${LVC_ANTHROPIC_API_KEY:-}
+      LVC_DEMO_SEED: ${LVC_DEMO_SEED:-1}   # seed verified records + audit chain on boot; set 0 to disable
     depends_on:
       mongo: { condition: service_healthy }
     ports: ["8000:8000"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
 
   web:
     build: { context: ./frontend, dockerfile: Dockerfile }
-    depends_on: [api]
+    depends_on:
+      api: { condition: service_healthy }
     ports: ["5173:80"]
 
 volumes:

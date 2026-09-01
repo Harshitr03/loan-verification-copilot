@@ -33,3 +33,21 @@ async def test_runner_reproduces_full_ground_truth_superset(tmp_path, db):
     # one summary validation event, none per-exception:
     assert await AuditEntry.find(AuditEntry.event_type == "validation_executed").count() == 1
     assert await AuditEntry.find(AuditEntry.event_type == "exception_created").count() == 0
+
+
+@pytest.mark.asyncio
+async def test_field_availability_gating_no_borrower_no_manifest(db):
+    # FNMA-shaped upload: has loan_id/principal/dates but NO borrower_id and NO manifest.
+    # required_fields must not flood on borrower_id, and document_status_present must be gated.
+    from backend.app.ingestion.service import ingest_dataset
+    tape = (b"loan_id,original_principal,origination_date,maturity_date,interest_rate,current_balance,payment_status,days_past_due,borrower_state\n"
+            + b"".join(
+                f"LN{i:03d},250000.00,2020-01-15,2050-01-15,5.25,200000.00,CURRENT,0,CA\n".encode()
+                for i in range(20)))
+    ds = await ingest_dataset(("t.csv", tape), "FNMA_SF_LPD", "op")   # no siblings
+    res = await run_validation(str(ds.id))
+    flagged = {(e.loan_id, e.rule_id) async for e in Exc.find(Exc.dataset_id == str(ds.id))}
+    assert not any(rid == "document_status_present" for _, rid in flagged)   # gated
+    assert not any(rid == "required_fields" for _, rid in flagged)           # borrower_id not required
+    assert "required_fields:borrower_id" in res["gated_rules"]
+    assert res["quality_score"] == 1.0     # clean FNMA-shaped rows now score 100%, not 0%

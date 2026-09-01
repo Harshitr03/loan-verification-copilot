@@ -1,4 +1,6 @@
+import dataclasses
 from collections import Counter
+from types import MappingProxyType
 from loan_rules import load_rules, validate_dataset, Dataset
 from backend.app.models import Loan, RawRecord, Exception as Exc, Dataset as DatasetDoc
 from backend.app.ingestion.normalize import to_canonical
@@ -30,7 +32,24 @@ async def run_validation(dataset_id, rules_path=None) -> dict:
         plain.append(canon)
     servicer = await _siblings(dataset_id, "servicer_update")
     manifest = await _siblings(dataset_id, "document_manifest")
-    rules = load_rules(rules_path)
+
+    # Field-availability gating (same principle as the fnma_sf connector's pass3_rules):
+    # a rule that flags on the ABSENCE of an input the source structurally lacks would flag
+    # every loan (e.g. real FNMA data has no borrower_id / document_status / manifest). Skip
+    # or narrow those rather than flood the queue. Sources that DO carry the field (the graded
+    # synthetic tape) are unaffected.
+    has_manifest = bool(manifest)
+    has_borrower = any(p.get("borrower_id") for p in plain)
+    rules, gated = [], []
+    for r in load_rules(rules_path):
+        if r.id == "document_status_present" and not has_manifest:
+            gated.append(r.id)
+            continue                                   # can't assess doc presence with no manifest
+        if r.id == "required_fields" and not has_borrower:
+            req = [f for f in r.params.get("required", []) if f != "borrower_id"]
+            r = dataclasses.replace(r, params=MappingProxyType({**dict(r.params), "required": req}))
+            gated.append("required_fields:borrower_id")
+        rules.append(r)
     violations = validate_dataset(Dataset(plain, servicer, manifest), rules)
 
     # idempotent re-validation: clear this dataset's prior rule-sourced exceptions
@@ -64,5 +83,6 @@ async def run_validation(dataset_id, rules_path=None) -> dict:
     await audit.append("validation_executed", "dataset", dataset_id, "system",
                        {"exceptions": len(violations),
                         "by_rule": dict(Counter(v.rule_id for v in violations)),
-                        "by_severity": dict(Counter(v.severity for v in violations))})
-    return {"exceptions": len(violations), "quality_score": score}
+                        "by_severity": dict(Counter(v.severity for v in violations)),
+                        "gated_rules": gated})
+    return {"exceptions": len(violations), "quality_score": score, "gated_rules": gated}

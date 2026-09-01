@@ -1,3 +1,4 @@
+import os
 from contextlib import asynccontextmanager
 from motor.motor_asyncio import AsyncIOMotorClient
 from backend.app.config import get_settings
@@ -18,6 +19,14 @@ async def lifespan(app):
         await seed_users()                  # idempotent; no-op if users.json absent
     except FileNotFoundError:
         pass
+    if os.getenv("LVC_DEMO_SEED", "1") != "0":
+        # Populate a good demo state (verified records + audit chain). Idempotent and
+        # best-effort: a seeding hiccup must never keep the API from coming up.
+        try:
+            from backend.app.demo_seed import seed_demo
+            await seed_demo()
+        except Exception as e:              # noqa: BLE001 — boot resilience over strictness
+            print(f"[demo_seed] skipped: {e}")
     try:
         yield
     finally:

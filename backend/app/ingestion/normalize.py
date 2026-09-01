@@ -1,6 +1,6 @@
-from datetime import datetime
 from decimal import Decimal, InvalidOperation
 from loan_rules.rules_row import US_STATES   # reuse the canonical 51-code set
+from loan_rules._dates import parse_date      # reuse the shared date parser (no 3rd parser)
 
 VALID_STATES = set(US_STATES)
 
@@ -29,9 +29,6 @@ NAME_TO_CODE = {
     "Wisconsin": "WI", "Wyoming": "WY", "District Of Columbia": "DC",
 }
 
-_DATE_FMTS = ("%Y-%m-%d", "%m/%d/%Y", "%d-%m-%Y", "%Y/%m/%d")
-
-
 def _clean(s):
     return (s or "").strip()
 
@@ -47,17 +44,14 @@ def _money(s):
 
 
 def _date(s):
-    # Lenient: parseable -> date; empty -> None; unparseable -> the raw string kept
-    # verbatim so the `valid_dates` rule (not normalization) flags it at validation.
+    # Lenient, reusing loan_rules.parse_date: parseable -> date; empty -> None;
+    # unparseable -> the raw string kept verbatim so the `valid_dates` rule (not
+    # normalization) flags it at validation.
     s = _clean(s)
     if not s:
         return None
-    for f in _DATE_FMTS:
-        try:
-            return datetime.strptime(s, f).date()
-        except ValueError:
-            continue
-    return s
+    d = parse_date(s)
+    return d if d is not None else s
 
 
 def _int(s):
