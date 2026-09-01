@@ -4,6 +4,12 @@ import { Empty, SkeletonRows, useToast } from "../ui";
 
 function Badge({ s }: { s: string }) { return <span className={"badge " + s}>{s}</span>; }
 
+const AI_KINDS = [
+  { k: "explain", tip: "Explain in plain language why this record failed validation." },
+  { k: "suggest", tip: "Propose a corrected value, with a confidence score." },
+  { k: "compare", tip: "Compare the loan tape against the servicer file and recommend the reliable value." },
+];
+
 export default function Reviewer() {
   const [items, setItems] = useState<any[] | null>(null);
   const [sev, setSev] = useState("");
@@ -134,10 +140,11 @@ function Drawer({ exc, onClose }: { exc: any; onClose: () => void }) {
           </div>
         </div>
 
-        <h2 style={{ marginTop: 22 }}>AI assistant</h2>
+        <h2 style={{ marginTop: 24 }}><span className="step-n">1</span> Understand · AI assistant</h2>
+        <p className="hint">Advisory only — the AI never changes data, and every suggestion is logged to the audit trail.</p>
         <div className="row">
-          {["explain", "suggest", "compare"].map((k) => (
-            <button key={k} className="sm ghost" disabled={!!aiBusy} onClick={() => runAi(k)}>
+          {AI_KINDS.map(({ k, tip }) => (
+            <button key={k} className="sm ghost" disabled={!!aiBusy} onClick={() => runAi(k)} title={tip}>
               {aiBusy === k ? "…" : k[0].toUpperCase() + k.slice(1)}
             </button>
           ))}
@@ -159,7 +166,8 @@ function Drawer({ exc, onClose }: { exc: any; onClose: () => void }) {
           </div>
         )}
 
-        <h2 style={{ marginTop: 22 }}>Decision</h2>
+        <h2 style={{ marginTop: 24 }}><span className="step-n">2</span> Decide</h2>
+        <p className="hint">Resolve this exception before the loan can be verified.</p>
         {editing ? (
           <div className="ai">
             <label>New value for {exc.field}</label>
@@ -171,17 +179,23 @@ function Drawer({ exc, onClose }: { exc: any; onClose: () => void }) {
           </div>
         ) : (
           <div className="row">
-            <button className="sm" onClick={() => setEditing(true)}>Apply edit</button>
-            <button className="sm ghost" onClick={() => resolve("approve")}>Approve</button>
-            <button className="sm ghost danger" onClick={() => resolve("reject")}>Reject</button>
-            <button className="sm ghost" onClick={() => resolve("request_correction")}>Request fix</button>
+            <button className="sm" onClick={() => setEditing(true)} title="Correct the field value yourself">Apply edit</button>
+            <button className="sm ghost" onClick={() => resolve("approve")} title="Accept the current value as correct">Approve</button>
+            <button className="sm ghost danger" onClick={() => resolve("reject")} title="Reject this record">Reject</button>
+            <button className="sm ghost" onClick={() => resolve("request_correction")} title="Send back to the operator to fix">Request fix</button>
           </div>
         )}
-        <div style={{ marginTop: 14 }}>
-          <button onClick={verify} disabled={openCount > 0}>✓ Verify loan</button>
+
+        <h2 style={{ marginTop: 24 }}><span className="step-n">3</span> Verify</h2>
+        <p className="hint">Once every exception on this loan is cleared, seal it into a hash-chained verified record.</p>
+        <div>
+          <button onClick={verify} disabled={openCount > 0}
+            title={openCount > 0 ? "Resolve all exceptions first" : "Create the verified, hash-chained record"}>
+            ✓ Verify loan
+          </button>
           {openCount > 0 && (
             <div className="faint mono" style={{ fontSize: 11, marginTop: 6 }}>
-              Resolve {openCount} open exception{openCount > 1 ? "s" : ""} on this loan before verifying.
+              {openCount} open exception{openCount > 1 ? "s" : ""} remaining on this loan.
             </div>
           )}
         </div>

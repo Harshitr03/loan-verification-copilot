@@ -379,3 +379,56 @@ kbd {
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .001ms !important; transition-duration: .001ms !important; }
 }
+
+/* =========================== role switcher (header) =========================== */
+.viewas { display: flex; align-items: center; gap: 10px; }
+.viewas-label { font: 600 10px/1 var(--mono); letter-spacing: 1px; text-transform: uppercase; color: var(--faint); }
+.role-switch { display: flex; border: 1px solid var(--line-strong); border-radius: 8px; overflow: hidden; }
+.role-tab {
+  background: var(--panel2); color: var(--muted); border: 0; border-right: 1px solid var(--line);
+  border-radius: 0; padding: 6px 15px; font: 600 12px var(--sans); cursor: pointer;
+}
+.role-tab:last-child { border-right: 0; }
+.role-tab:hover:not(.active):not(:disabled) { background: var(--panel); color: var(--text); }
+.role-tab.active { background: var(--accent); color: #fff; }
+.role-tab:disabled { cursor: default; }
+
+/* =========================== lifecycle pipeline strip =========================== */
+.pipeline {
+  display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 3px;
+  padding: 13px 22px; background: var(--panel); border-bottom: 1px solid var(--line);
+}
+.pipeline-item { display: flex; align-items: center; gap: 3px; }
+.pstep {
+  display: flex; align-items: center; gap: 8px; padding: 5px 13px 5px 6px;
+  border-radius: 999px; border: 1px solid var(--line); background: var(--panel2);
+}
+.pstep .pnum {
+  width: 18px; height: 18px; border-radius: 50%; display: grid; place-items: center;
+  font: 700 10px var(--mono); background: var(--line); color: var(--muted); flex: none;
+}
+.pstep .plabel { font: 600 12px var(--sans); color: var(--muted); }
+.pstep.active { border-color: var(--accent); background: var(--accent-tint); }
+.pstep.active .pnum { background: var(--accent); color: #fff; }
+.pstep.active .plabel { color: var(--accent-ink); }
+.parrow { color: var(--faint); font-size: 13px; margin: 0 3px; }
+
+/* drawer step badges + helper text */
+.step-n {
+  display: inline-grid; place-items: center; width: 18px; height: 18px; border-radius: 50%;
+  background: var(--accent); color: #fff; font: 700 10px/1 var(--mono); margin-right: 8px;
+  vertical-align: 1px;
+}
+.hint { color: var(--faint); font-size: 12px; line-height: 1.5; margin: 3px 0 11px; }
+
+/* per-role intro line above the page */
+.role-intro {
+  color: var(--muted); font-size: 13px; line-height: 1.5;
+  margin: 0 0 20px; padding-bottom: 16px; border-bottom: 1px solid var(--line);
+}
+
+@media (max-width: 760px) {
+  .top { height: auto; flex-wrap: wrap; gap: 8px 12px; padding: 10px 14px; }
+  .viewas-label { display: none; }
+  .pipeline { overflow-x: auto; justify-content: flex-start; }
+}
