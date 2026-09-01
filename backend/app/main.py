@@ -1,9 +1,23 @@
+import os
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from backend.app.lifespan import lifespan
 
 
 def create_app() -> FastAPI:
     app = FastAPI(title="Loan Verification Copilot API", lifespan=lifespan)
+
+    # The SPA is served from a different origin in prod (Amplify) than the API (Cloud Run),
+    # so browsers need CORS headers. LVC_CORS_ORIGINS is a comma-separated allow-list;
+    # "*" (default) is fine here because auth is a Bearer token, not a cookie.
+    origins = os.getenv("LVC_CORS_ORIGINS", "*")
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"] if origins.strip() == "*" else [o.strip() for o in origins.split(",")],
+        allow_credentials=False,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
     @app.get("/health")
     async def health():

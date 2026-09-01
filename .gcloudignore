@@ -1,0 +1,21 @@
+# Keep the Cloud Build upload small: the backend image only needs
+# pyproject.toml + loan_rules/ + data/ + fnma_sf/ + backend/ (see Dockerfile).
+.git/
+.venv/
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
+
+# frontend is deployed separately (Amplify)
+frontend/
+node_modules/
+
+# docs, samples, local artifacts
+docs/
+sample_data/
+*.pdf
+.DS_Store
+scratchpad/
+mongo_data/

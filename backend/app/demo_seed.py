@@ -106,3 +106,28 @@ async def seed_demo(target: int = 10) -> int:
         except Exception as e:              # noqa: BLE001 — one bad row must not abort the batch
             print(f"[demo_seed] skipped {loan.loan_id}: {e}")
     return added
+
+
+if __name__ == "__main__":
+    # Standalone seeding, e.g. against Atlas from your laptop:
+    #   LVC_MONGODB_URI="mongodb+srv://..." python -m backend.app.demo_seed
+    # Seeds users too, so a fresh cloud DB can be logged into immediately.
+    import asyncio
+    from motor.motor_asyncio import AsyncIOMotorClient
+    from backend.app.db import init_db
+    from backend.app.config import get_settings
+    from backend.app.seed import seed_users
+
+    async def _main():
+        s = get_settings()
+        client = AsyncIOMotorClient(s.mongodb_uri)
+        await init_db(client, s.mongodb_db)
+        try:
+            await seed_users()
+        except FileNotFoundError:
+            pass
+        n = await seed_demo()
+        print(f"[demo_seed] added {n} verified records to '{s.mongodb_db}'")
+        client.close()
+
+    asyncio.run(_main())
